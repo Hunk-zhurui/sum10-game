@@ -8,6 +8,13 @@ export 'grid.dart';
 export '../models/cell.dart';
 export '../models/game_state.dart';
 
+/// 游戏难度
+enum GameDifficulty {
+  easy,    // 80 秒，数字更友好
+  normal,  // 60 秒，标准
+  hard,    // 45 秒，更具挑战
+}
+
 /// 游戏引擎
 /// 管理游戏核心逻辑
 class GameEngine {

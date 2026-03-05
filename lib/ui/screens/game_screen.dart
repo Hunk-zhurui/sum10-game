@@ -4,11 +4,20 @@ import '../core/grid.dart';
 import '../models/cell.dart';
 import '../models/game_state.dart';
 import '../theme/colors.dart';
+import '../services/audio_service.dart';
+import '../services/storage_service.dart';
 import 'game_over_screen.dart';
+import 'widgets/effects.dart';
+import 'widgets/tutorial_overlay.dart';
 
 /// 游戏主界面
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  final bool showTutorial;
+
+  const GameScreen({
+    super.key,
+    this.showTutorial = true,
+  });
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -16,18 +25,29 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   final GameEngine _engine = GameEngine();
+  final AudioService _audio = AudioService();
+  final StorageService _storage = StorageService();
+
   String _message = '';
-  Color _messageColor = AppColors.textPrimary;
+  Color _messageColor = AppColors.success;
+  int _tutorialStep = 0;
+  int _comboCount = 0;
+  DateTime? _lastEliminateTime;
 
   @override
   void initState() {
     super.initState();
     _engine.startGame();
+    _audio.playBGM();
+    if (!widget.showTutorial) {
+      _tutorialStep = 999; // 跳过教程
+    }
   }
 
   @override
   void dispose() {
     _engine.dispose();
+    _audio.stopBGM();
     super.dispose();
   }
 
@@ -46,26 +66,44 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onCellTap(GameCell cell) {
-    if (!_engine.isPlaying) return;
+    if (!_engine.isPlaying || _tutorialStep < 999) return;
 
+    _audio.playTap();
     _engine.selectCell(cell);
 
     // 自动尝试消除
     final result = _engine.tryEliminate();
     switch (result) {
       case EliminateResult.success:
+        final now = DateTime.now();
+        if (_lastEliminateTime != null &&
+            now.difference(_lastEliminateTime!).inSeconds < 3) {
+          _comboCount++;
+          if (_comboCount >= 2) {
+            _audio.playCombo(level: _comboCount);
+          }
+        } else {
+          _comboCount = 1;
+        }
+        _lastEliminateTime = now;
+
+        _audio.playEliminate(count: _engine.status.selectedCells.length);
         _showMessage('+${_engine.status.selectedCells.length * 10}分', AppColors.success);
         break;
       case EliminateResult.tooHigh:
+        _comboCount = 0;
         _showMessage('和超过 10', AppColors.error);
         break;
       case EliminateResult.tooLow:
+        _comboCount = 0;
         _showMessage('和不等于 10', AppColors.error);
         break;
       case EliminateResult.notConnected:
+        _comboCount = 0;
         _showMessage('必须相邻', AppColors.error);
         break;
       case EliminateResult.allCleared:
+        _audio.playGameOver(isWin: true);
         _showMessage('全部消除！', AppColors.success);
         break;
       default:
@@ -74,6 +112,8 @@ class _GameScreenState extends State<GameScreen> {
 
     // 检查游戏是否结束
     if (_engine.status.state == GameState.gameOver) {
+      _storage.incrementGames();
+      _storage.saveHighScore(_engine.status.score);
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
           Navigator.pushReplacement(
@@ -128,10 +168,48 @@ class _GameScreenState extends State<GameScreen> {
                   ),
                 ),
 
+              // 连击提示
+              if (_comboCount >= 2 && _tutorialStep == 999)
+                Positioned(
+                  top: 120,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: ComboEffect(
+                      level: _comboCount,
+                      position: const Offset(0, 0),
+                    ),
+                  ),
+                ),
+
               // 游戏网格
               Expanded(
                 child: _buildGameGrid(),
               ),
+
+              // 教程覆盖层
+              if (_tutorialStep < 999)
+                TutorialOverlay(
+                  step: _tutorialStep,
+                  onNext: () {
+                    if (_tutorialStep < 4) {
+                      setState(() {
+                        _tutorialStep++;
+                      });
+                    } else {
+                      setState(() {
+                        _tutorialStep = 999;
+                      });
+                      _storage.saveSettings({'showTutorial': false});
+                    }
+                  },
+                  onSkip: () {
+                    setState(() {
+                      _tutorialStep = 999;
+                    });
+                    _storage.saveSettings({'showTutorial': false});
+                  },
+                ),
             ],
           ),
         ),
@@ -141,6 +219,12 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget _buildStatusBar() {
     final status = _engine.status;
+    final isTimeWarning = status.timeRemaining <= 10;
+
+    if (isTimeWarning) {
+      _audio.playTimeWarning();
+    }
+
     return Container(
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -149,29 +233,33 @@ class _GameScreenState extends State<GameScreen> {
           _buildStatBox(
             '⏱️ 时间',
             '${status.timeRemaining}',
-            status.timeRemaining <= 10 ? AppColors.error : Colors.white,
+            isTimeWarning ? AppColors.error : Colors.white,
+            isTimeWarning,
           ),
           _buildStatBox(
             '🎯 分数',
             '${status.score}',
             Colors.white,
+            false,
           ),
           _buildStatBox(
             '📦 剩余',
             '${status.remainingCells}',
             Colors.white,
+            false,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatBox(String label, String value, Color color) {
+  Widget _buildStatBox(String label, String value, Color color, bool isWarning) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.2),
         borderRadius: BorderRadius.circular(10),
+        border: isWarning ? Border.all(color: Colors.white, width: 2) : null,
       ),
       child: Column(
         children: [
@@ -182,12 +270,16 @@ class _GameScreenState extends State<GameScreen> {
               color: Colors.white70,
             ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
           ),
         ],
@@ -223,6 +315,7 @@ class _GameScreenState extends State<GameScreen> {
           return _GameCellWidget(
             cell: cell,
             onTap: () => _onCellTap(cell),
+            isTutorial: _tutorialStep < 999,
           );
         },
       ),
@@ -234,10 +327,12 @@ class _GameScreenState extends State<GameScreen> {
 class _GameCellWidget extends StatelessWidget {
   final GameCell cell;
   final VoidCallback onTap;
+  final bool isTutorial;
 
   const _GameCellWidget({
     required this.cell,
     required this.onTap,
+    this.isTutorial = false,
   });
 
   @override
@@ -247,11 +342,6 @@ class _GameCellWidget extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.cellEliminated.withOpacity(0.3),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: AppColors.cellEliminated.withOpacity(0.3),
-            width: 2,
-            style: BorderStyle.solid,
-          ),
         ),
       );
     }
@@ -259,8 +349,9 @@ class _GameCellWidget extends StatelessWidget {
     final color = AppColors.numberColors[cell.value] ?? AppColors.cellBackground;
 
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
+      onTap: isTutorial ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           gradient: cell.isSelected
               ? const LinearGradient(
