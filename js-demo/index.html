@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>和为 10 消除游戏</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 10px;
+      min-height: 100vh;
+    }
+    
+    .top-bar {
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    
+    .top-bar button {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 12px 35px;
+      border-radius: 25px;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
+    }
+    
+    .top-bar button:active { transform: scale(0.95); }
+    
+    .stats-bar {
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 10px;
+    }
+    
+    .stat {
+      background: rgba(255,255,255,0.2);
+      padding: 8px 15px;
+      border-radius: 8px;
+      text-align: center;
+      min-width: 70px;
+    }
+    
+    .stat-label { font-size: 10px; opacity: 0.9; }
+    .stat-value { font-size: 20px; font-weight: bold; }
+    .timer-warning { animation: pulse 0.5s infinite; background: rgba(255,0,0,0.5); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    
+    .game-container {
+      background: white;
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      border: 4px solid #667eea;
+      width: 100%;
+      max-width: 500px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      overflow: hidden;
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 3px;
+      width: 100%;
+      aspect-ratio: 10 / 16;
+      max-height: calc(100vh - 180px);
+    }
+    
+    .cell {
+      background: linear-gradient(145deg, #f0f0f0, #e0e0e0);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(14px, 4vw, 20px);
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.1s;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+      width: 100%;
+      height: 100%;
+    }
+    
+    .cell:active { transform: scale(0.85); }
+    .cell.selected {
+      background: linear-gradient(145deg, #667eea, #764ba2);
+      color: white;
+      transform: scale(0.9);
+    }
+    .cell.eliminated {
+      background: rgba(0,0,0,0.06);
+      pointer-events: none;
+    }
+    .cell.eliminate-anim {
+      animation: eliminate 0.3s forwards;
+    }
+    @keyframes eliminate {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.8; }
+      100% { transform: scale(0); opacity: 0; }
+    }
+    
+    .sum-display {
+      margin-top: 10px;
+      padding: 10px 20px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #667eea;
+      text-align: center;
+      width: 100%;
+      max-width: 500px;
+    }
+    
+    .message {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 18px 30px;
+      background: rgba(0,0,0,0.85);
+      color: white;
+      border-radius: 10px;
+      font-size: 18px;
+      display: none;
+      z-index: 2000;
+    }
+    .message.show { display: block; }
+    
+    .game-over {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 35px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      text-align: center;
+      z-index: 1000;
+      display: none;
+      max-width: 90%;
+      min-width: 300px;
+    }
+    .game-over.show { display: block; }
+    .game-over h2 { color: #667eea; margin-bottom: 15px; font-size: 26px; }
+    .game-over .final-score { font-size: 50px; font-weight: bold; color: #764ba2; margin: 20px 0; }
+    .game-over .stats { margin: 15px 0; color: #666; font-size: 15px; }
+    .game-over button {
+      margin: 10px 5px;
+      background: white;
+      color: #667eea;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 25px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    .game-over button.primary {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <button id="startBtn" onclick="startGame()">▶️ 开始游戏</button>
+  </div>
+  
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-label">⏱️ 时间</div>
+      <div class="stat-value" id="timer">60</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">🎯 分数</div>
+      <div class="stat-value" id="score">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">📦 剩余</div>
+      <div class="stat-value" id="remaining">160</div>
+    </div>
+  </div>
+  
+  <div class="game-container">
+    <div class="grid" id="grid"></div>
+  </div>
+  
+  <div class="sum-display" id="sumDisplay">已选：0 / 10</div>
+  
+  <div class="message" id="message"></div>
+  
+  <div class="game-over" id="gameOver">
+    <h2 id="gameOverTitle">🎉 游戏结束!</h2>
+    <div class="final-score" id="finalScore">0</div>
+    <div class="stats" id="gameStats"></div>
+    <button class="primary" onclick="closeGameOver()">确定</button>
+    <button onclick="startGame()">再来一局</button>
+  </div>
+
+  <script>
+    const ROWS = 16;
+    const COLS = 10;
+    const GAME_TIME = 60;
+    const TARGET_SUM = 10;
+
+    let grid = [];
+    let selected = [];
+    let score = 0;
+    let remaining = ROWS * COLS;
+    let timer = GAME_TIME;
+    let timerId = null;
+    let isPlaying = false;
+    let isSliding = false;
+    let lastSelectedCell = null;
+    let slideStartTime = 0;
+
+    function randomNum() {
+      const weights = [1, 2, 3, 4, 5, 5, 4, 3, 2];
+      const total = weights.reduce((a, b) => a + b, 0);
+      let rand = Math.random() * total;
+      for (let i = 0; i < weights.length; i++) {
+        rand -= weights[i];
+        if (rand <= 0) return i + 1;
+      }
+      return 5;
+    }
+
+    function initGrid() {
+      grid = [];
+      for (let r = 0; r < ROWS; r++) {
+        grid[r] = [];
+        for (let c = 0; c < COLS; c++) {
+          grid[r][c] = randomNum();
+        }
+      }
+      ensureInitialMatches();
+    }
+
+    function ensureInitialMatches() {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS - 1; c++) {
+          if (Math.random() < 0.3) {
+            const num1 = Math.floor(Math.random() * 9) + 1;
+            const num2 = 10 - num1;
+            if (num2 >= 1 && num2 <= 9) {
+              grid[r][c] = num1;
+              grid[r][c + 1] = num2;
+            }
+          }
+        }
+      }
+    }
+
+    function renderGrid() {
+      const gridEl = document.getElementById('grid');
+      gridEl.innerHTML = '';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          if (grid[r][c] === null) {
+            cell.classList.add('eliminated');
+          } else {
+            cell.textContent = grid[r][c];
+            cell.dataset.r = r;
+            cell.dataset.c = c;
+            
+            cell.addEventListener('touchstart', onTouchStart, { passive: false });
+            cell.addEventListener('touchmove', onTouchMove, { passive: false });
+            cell.addEventListener('touchend', onTouchEnd);
+            cell.addEventListener('mousedown', onMouseDown);
+            cell.addEventListener('mouseenter', onMouseEnter);
+            cell.addEventListener('mouseup', onMouseUp);
+            
+            if (selected.some(s => s.r === r && s.c === c)) {
+              cell.classList.add('selected');
+            }
+          }
+          gridEl.appendChild(cell);
+        }
+      }
+      updateUI();
+    }
+
+    function onTouchStart(e) {
+      if (!isPlaying) return;
+      const r = parseInt(e.target.dataset.r);
+      const c = parseInt(e.target.dataset.c);
+      if (grid[r][c] === null) return;
+      
+      e.preventDefault();
+      isSliding = true;
+      slideStartTime = Date.now();
+      selected = [];
+      selectCell(r, c);
+      lastSelectedCell = { r, c };
+    }
+
+    function onTouchMove(e) {
+      if (!isSliding || !isPlaying) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (element && element.classList.contains('cell') && !element.classList.contains('eliminated')) {
+        const r = parseInt(element.dataset.r);
+        const c = parseInt(element.dataset.c);
+        
+        if (lastSelectedCell && !selected.some(s => s.r === r && s.c === c)) {
+          // 检查是否可以从上一个格子到达这个格子
+          if (canConnect(lastSelectedCell, {r, c})) {
+            selectCell(r, c);
+            lastSelectedCell = { r, c };
+          }
+        }
+      }
+    }
+
+    function onTouchEnd() {
+      if (!isSliding) return;
+      isSliding = false;
+      checkAndEliminate();
+      lastSelectedCell = null;
+    }
+
+    function onMouseDown(e) {
+      if (!isPlaying) return;
+      const r = parseInt(e.target.dataset.r);
+      const c = parseInt(e.target.dataset.c);
+      if (grid[r][c] === null) return;
+      
+      isSliding = true;
+      slideStartTime = Date.now();
+      selected = [];
+      selectCell(r, c);
+      lastSelectedCell = { r, c };
+    }
+
+    function onMouseEnter(e) {
+      if (!isSliding || !isPlaying) return;
+      const r = parseInt(e.target.dataset.r);
+      const c = parseInt(e.target.dataset.c);
+      if (grid[r][c] === null) return;
+      
+      if (lastSelectedCell && !selected.some(s => s.r === r && s.c === c)) {
+        if (canConnect(lastSelectedCell, {r, c})) {
+          selectCell(r, c);
+          lastSelectedCell = { r, c };
+        }
+      }
+    }
+
+    function onMouseUp() {
+      if (!isSliding) return;
+      isSliding = false;
+      checkAndEliminate();
+      lastSelectedCell = null;
+    }
+
+    function selectCell(r, c) {
+      selected.push({ r, c, value: grid[r][c] });
+      updateSumDisplay();
+      renderGrid();
+    }
+
+    function updateSumDisplay() {
+      const sum = selected.reduce((s, cell) => s + cell.value, 0);
+      const display = document.getElementById('sumDisplay');
+      display.textContent = `已选：${sum} / ${TARGET_SUM}`;
+      if (sum === TARGET_SUM) {
+        display.style.color = '#48bb78';
+      } else if (sum > TARGET_SUM) {
+        display.style.color = '#f56565';
+      } else {
+        display.style.color = '#667eea';
+      }
+    }
+
+    function updateUI() {
+      document.getElementById('score').textContent = score;
+      document.getElementById('remaining').textContent = remaining;
+      document.getElementById('timer').textContent = timer;
+      
+      const timerEl = document.getElementById('timer').parentElement;
+      if (timer <= 10) {
+        timerEl.classList.add('timer-warning');
+      } else {
+        timerEl.classList.remove('timer-warning');
+      }
+    }
+
+    function checkAndEliminate() {
+      const sum = selected.reduce((s, cell) => s + cell.value, 0);
+      
+      if (sum === TARGET_SUM && areAdjacent(selected)) {
+        selected.forEach(cell => {
+          const cellEl = document.querySelector(`.cell[data-r="${cell.r}"][data-c="${cell.c}"]`);
+          if (cellEl) {
+            cellEl.classList.add('eliminate-anim');
+          }
+        });
+        
+        setTimeout(() => {
+          selected.forEach(cell => {
+            grid[cell.r][cell.c] = null;
+          });
+          
+          score += selected.length * 10;
+          remaining -= selected.length;
+          selected = [];
+          
+          showMessage(`+${selected.length * 10}分`);
+          renderGrid();
+          
+          if (remaining === 0) {
+            endGame(true);
+          }
+        }, 300);
+      } else {
+        if (sum > TARGET_SUM) {
+          showMessage('和超过 10');
+        } else if (!areAdjacent(selected)) {
+          showMessage('必须相邻');
+        } else {
+          showMessage('不等于 10');
+        }
+        setTimeout(() => {
+          selected = [];
+          renderGrid();
+          updateSumDisplay();
+        }, 400);
+      }
+    }
+
+    // BFS 检查所有选中的方块是否连通（允许通过对角线空位）
+    function areAdjacent(cells) {
+      if (cells.length < 2) return cells.length === 1;
+      
+      const visited = new Set();
+      const queue = [cells[0]];
+      visited.add(`${cells[0].r},${cells[0].c}`);
+      
+      while (queue.length > 0) {
+        const curr = queue.shift();
+        for (const cell of cells) {
+          const key = `${cell.r},${cell.c}`;
+          if (visited.has(key)) continue;
+          
+          if (canConnect(curr, cell)) {
+            visited.add(key);
+            queue.push(cell);
+          }
+        }
+      }
+      
+      return visited.size === cells.length;
+    }
+
+    // 检查两个格子是否可以连接（包括通过对角线空位）
+    function canConnect(from, to) {
+      const dr = Math.abs(from.r - to.r);
+      const dc = Math.abs(from.c - to.c);
+      
+      // 直接相邻（上下左右）
+      if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+        return true;
+      }
+      
+      // 对角线相邻，需要至少一个相邻位置是空位
+      if (dr === 1 && dc === 1) {
+        const path1 = grid[from.r][to.c] === null;
+        const path2 = grid[to.r][from.c] === null;
+        return path1 || path2;
+      }
+      
+      // 其他情况：BFS 找路径
+      return hasPath(from, to);
+    }
+
+    // BFS 查找是否存在路径（允许 8 个方向穿过空位）
+    function hasPath(from, to) {
+      const visited = new Set();
+      const queue = [from];
+      visited.add(`${from.r},${from.c}`);
+      
+      // 8 个方向
+      const directions = [
+        [-1, 0], [1, 0], [0, -1], [0, 1],
+        [-1, -1], [-1, 1], [1, -1], [1, 1]
+      ];
+      
+      while (queue.length > 0) {
+        const curr = queue.shift();
+        
+        for (const [dr, dc] of directions) {
+          const nr = curr.r + dr;
+          const nc = curr.c + dc;
+          
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+          
+          const key = `${nr},${nc}`;
+          if (visited.has(key)) continue;
+          
+          // 到达目标
+          if (nr === to.r && nc === to.c) {
+            return true;
+          }
+          
+          // 空位可以穿过
+          if (grid[nr][nc] === null) {
+            visited.add(key);
+            queue.push({ r: nr, c: nc });
+          }
+        }
+      }
+      
+      return false;
+    }
+
+    function showMessage(text) {
+      const msgEl = document.getElementById('message');
+      msgEl.textContent = text;
+      msgEl.className = 'message show';
+      setTimeout(() => {
+        msgEl.classList.remove('show');
+      }, 400);
+    }
+
+    function startGame() {
+      if (isPlaying) return;
+      
+      initGrid();
+      score = 0;
+      remaining = ROWS * COLS;
+      timer = GAME_TIME;
+      selected = [];
+      isPlaying = true;
+      
+      renderGrid();
+      updateSumDisplay();
+      document.getElementById('startBtn').textContent = '⏳ 游戏中...';
+      document.getElementById('gameOver').classList.remove('show');
+      
+      timerId = setInterval(() => {
+        timer--;
+        updateUI();
+        if (timer <= 0) {
+          endGame(false);
+        }
+      }, 1000);
+    }
+
+    function endGame(cleared) {
+      isPlaying = false;
+      clearInterval(timerId);
+      
+      let finalScore = score;
+      if (cleared) {
+        finalScore += timer * 5;
+      }
+      
+      document.getElementById('gameOverTitle').textContent = cleared ? '🎉 全部消除！' : '⏰ 时间到！';
+      document.getElementById('finalScore').textContent = finalScore;
+      document.getElementById('gameStats').innerHTML = `
+        <div>消除方块：${ROWS * COLS - remaining} / ${ROWS * COLS}</div>
+        <div>剩余方块：${remaining}</div>
+        <div>剩余时间：${timer}秒</div>
+      `;
+      document.getElementById('gameOver').classList.add('show');
+      
+      document.getElementById('startBtn').textContent = '🔄 再来一局';
+    }
+
+    function closeGameOver() {
+      document.getElementById('gameOver').classList.remove('show');
+    }
+
+    // 初始化
+    initGrid();
+    renderGrid();
+    updateSumDisplay();
+  </script>
+</body>
+</html>
