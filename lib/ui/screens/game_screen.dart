@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../core/game_engine.dart';
-import '../core/grid.dart';
-import '../models/cell.dart';
-import '../models/game_state.dart';
-import '../theme/colors.dart';
-import '../services/audio_service.dart';
-import '../services/storage_service.dart';
+import '../../core/game_engine.dart';
+import '../../core/grid.dart';
+import '../../models/cell.dart';
+import '../../models/game_state.dart';
+import '../../theme/colors.dart';
+import '../../services/audio_service.dart';
+import '../../services/storage_service.dart';
 import 'game_over_screen.dart';
-import '../ui/widgets/effects.dart';
-import '../ui/widgets/tutorial_overlay.dart';
+import '../widgets/effects.dart';
+import '../widgets/tutorial_overlay.dart';
 
 /// 游戏主界面
 class GameScreen extends StatefulWidget {
