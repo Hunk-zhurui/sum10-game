@@ -1,7 +1,12 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import '../models/cell.dart';
 import '../models/game_state.dart';
 import 'grid.dart';
+
+export 'grid.dart';
+export '../models/cell.dart';
+export '../models/game_state.dart';
 
 /// 游戏引擎
 /// 管理游戏核心逻辑
