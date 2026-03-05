@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/game_engine.dart';
+import '../core/grid.dart';
 import '../models/cell.dart';
+import '../models/game_state.dart';
 import '../theme/colors.dart';
 import 'game_over_screen.dart';
 
@@ -203,15 +205,15 @@ class _GameScreenState extends State<GameScreen> {
         border: Border.all(color: Colors.white.withOpacity(0.5), width: 3),
       ),
       child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossMaxCount(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 10,
           mainAxisSpacing: 3,
           crossAxisSpacing: 3,
         ),
-        itemCount: GameGrid.rows * GameGrid.cols,
+        itemCount: 160, // 10x16
         itemBuilder: (context, index) {
-          final row = index ~/ GameGrid.cols;
-          final col = index % GameGrid.cols;
+          final row = index ~/ 10;
+          final col = index % 10;
           final cell = _engine.grid.getCell(row, col);
 
           if (cell == null) {
